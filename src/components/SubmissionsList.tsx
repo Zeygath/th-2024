@@ -1,24 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-type Props = {
-  supabase: SupabaseClient<Database>
-}
-
-type Submission = Database['public']['Tables']['submissions']['Row'] & {
-  users: { name: string }[] | null
-  riddles: { question: string }[] | null
-}
+type Submission = Database['public']['Tables']['submissions']['Row']
 
 type FormattedSubmission = Submission & {
   user_name: string
   riddle_question: string
+  signed_image_url: string | null
 }
 
-export default function SubmissionsList({ supabase }: Props) {
+export default function SubmissionsList() {
+  const supabase = createClientComponentClient<Database>()
   const [submissions, setSubmissions] = useState<FormattedSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,33 +21,84 @@ export default function SubmissionsList({ supabase }: Props) {
   const [hasMore, setHasMore] = useState(true)
   const ITEMS_PER_PAGE = 10
 
+  const getSignedUrl = async (filePath: string): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('submissions')
+        .createSignedUrl(filePath, 24 * 60 * 60) // 24 hours expiry
+
+      if (error) throw error
+
+      return data.signedUrl
+    } catch (error) {
+      console.error('Error creating signed URL:', error)
+      return null
+    }
+  }
+
   useEffect(() => {
     fetchSubmissions()
   }, [page])
 
   const fetchSubmissions = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: submissionsData, error: submissionsError } = await supabase
         .from('submissions')
-        .select(`
-          *,
-          users:users(name),
-          riddles:riddles(question)
-        `)
+        .select('*')
         .is('is_approved', null)
         .order('submitted_at', { ascending: false })
         .range((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE - 1)
 
-      if (error) throw error
+      if (submissionsError) throw submissionsError
 
-      const formattedData: FormattedSubmission[] = data.map(submission => ({
-        ...submission,
-        user_name: submission.users?.[0]?.name || 'Unknown',
-        riddle_question: submission.riddles?.[0]?.question || 'Unknown'
-      }))
+      const formattedData: FormattedSubmission[] = await Promise.all(
+        submissionsData.map(async (submission) => {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('name, is_team')
+            .eq('id', submission.user_id)
+            .single()
+
+          if (userError) throw userError
+
+          let userName = userData.name
+
+          if (userData.is_team) {
+            const { data: teamData, error: teamError } = await supabase
+              .from('teams')
+              .select('name')
+              .eq('user_id', submission.user_id)
+              .single()
+
+            if (teamError) throw teamError
+
+            userName = teamData.name
+          }
+
+          const { data: riddleData, error: riddleError } = await supabase
+            .from('riddles')
+            .select('question')
+            .eq('id', submission.riddle_id)
+            .single()
+
+          if (riddleError) throw riddleError
+
+          let signedImageUrl = null
+          if (submission.image_url) {
+            signedImageUrl = await getSignedUrl(submission.image_url)
+          }
+
+          return {
+            ...submission,
+            user_name: userName,
+            riddle_question: riddleData.question,
+            signed_image_url: signedImageUrl
+          }
+        })
+      )
 
       setSubmissions(prevSubmissions => [...prevSubmissions, ...formattedData])
-      setHasMore(data.length === ITEMS_PER_PAGE)
+      setHasMore(formattedData.length === ITEMS_PER_PAGE)
     } catch (error) {
       console.error('Error fetching submissions:', error)
       setError('Failed to load submissions. Please try again later.')
@@ -85,27 +131,38 @@ export default function SubmissionsList({ supabase }: Props) {
 
   if (loading && page === 1) return <div>Loading submissions...</div>
   if (error) return <div className="text-red-600">{error}</div>
+  if (submissions.length === 0) return <div>No pending submissions found.</div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {submissions.map((submission) => (
-        <div key={submission.id} className="bg-white shadow-md rounded-lg p-4">
-          <h3 className="font-bold">{submission.user_name}</h3>
-          <p className="text-sm text-gray-500">Spørsmål: {submission.riddle_question}</p>
-          <p className="mt-2">Svar: {submission.answer}</p>
-          <img src={submission.image_url} alt="Submission" className="mt-2 max-w-full h-auto" />
-          <div className="mt-4 flex space-x-2">
+        <div key={submission.id} className="bg-gray-800 shadow-lg rounded-lg p-6">
+          <h3 className="font-bold text-xl text-blue-400 mb-2">{submission.user_name}</h3>
+          <p className="text-gray-300 mb-2">Riddle: {submission.riddle_question}</p>
+          <p className="text-gray-300 mb-4">Answer: {submission.answer}</p>
+          {submission.signed_image_url ? (
+            <div className="mb-4">
+              <img 
+                src={submission.signed_image_url}
+                alt="Submission" 
+                className="max-w-full h-auto rounded-lg"
+              />
+            </div>
+          ) : submission.image_url ? (
+            <p className="text-yellow-500 mb-4">Image unavailable</p>
+          ) : null}
+          <div className="flex space-x-4">
             <button
               onClick={() => handleApproval(submission.id, true)}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
-              Godkjenn
+              Approve
             </button>
             <button
               onClick={() => handleApproval(submission.id, false)}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
             >
-              Avslå
+              Reject
             </button>
           </div>
         </div>
@@ -113,9 +170,9 @@ export default function SubmissionsList({ supabase }: Props) {
       {hasMore && (
         <button
           onClick={loadMore}
-          className="w-full mt-4 py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600"
+          className="w-full mt-6 py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
-          Last inn flere
+          Load More
         </button>
       )}
     </div>

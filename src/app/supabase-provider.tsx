@@ -15,7 +15,22 @@ type SupabaseContext = {
 const Context = createContext<SupabaseContext | undefined>(undefined)
 
 export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const [supabase] = useState(() => createClient<Database>(supabaseUrl, supabaseAnonKey))
+  const [supabase] = useState(() => createClient<Database>(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'supabase-js-v2',
+        },
+      },
+    }
+  ))
   const router = useRouter()
 
   useEffect(() => {

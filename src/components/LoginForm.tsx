@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSupabase } from '@/app/supabase-provider'
+import Link from 'next/link'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
@@ -76,6 +77,14 @@ export default function LoginForm() {
         >
           Logg inn
         </button>
+      </div>
+      <div className="mt-4 text-center">
+        <p className="text-sm text-gray-300">
+          Har du ikke konto?{' '}
+          <Link href="/register" className="text-blue-400 hover:text-blue-300">
+            Registrer deg her
+          </Link>
+        </p>
       </div>
     </form>
   )

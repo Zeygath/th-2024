@@ -80,7 +80,7 @@ export default function AdminDashboard() {
        <RiddleForm supabase={supabase} />
      </TabsContent>
      <TabsContent value="submissions">
-       <SubmissionsList supabase={supabase} />
+       <SubmissionsList />
      </TabsContent>
    </Tabs>
  )
