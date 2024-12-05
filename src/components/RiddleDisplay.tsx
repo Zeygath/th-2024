@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react'
 import { useSupabase } from '@/app/supabase-provider'
 import { useAuth } from '@/hooks/useAuth'
 import { Riddle, UserProgress, AppSettings } from '@/types/supabase'
-import CountdownTimer from './CountdownTimer';
+import CountdownTimer from './CountdownTimer'
+import CongratulationsMessage from './CongratulationsMessage'
+import Image from 'next/image'
 
 const targetDate = new Date('2024-12-06T20:00:00') // December 6th, 2024, 20:00
 
@@ -15,12 +17,14 @@ export default function RiddleDisplay() {
  const [riddleNumber, setRiddleNumber] = useState<number | null>(null)
  const [answer, setAnswer] = useState('')
  const [image, setImage] = useState<File | null>(null)
+ const [imagePreview, setImagePreview] = useState<string | null>(null)
  const [showHint1, setShowHint1] = useState(false)
  const [showHint2, setShowHint2] = useState(false)
  const [error, setError] = useState<string | null>(null)
  const [success, setSuccess] = useState<string | null>(null)
  const [riddlesVisible, setRiddlesVisible] = useState(false)
  const [uploading, setUploading] = useState(false)
+ const [showConfetti, setShowConfetti] = useState(false)
 
  useEffect(() => {
    if (user && riddlesVisible) {
@@ -127,7 +131,9 @@ export default function RiddleDisplay() {
 
  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
    if (e.target.files && e.target.files[0]) {
-     setImage(e.target.files[0])
+     const file = e.target.files[0]
+     setImage(file)
+     setImagePreview(URL.createObjectURL(file))
    }
  }
 
@@ -145,15 +151,9 @@ export default function RiddleDisplay() {
 
     if (uploadError) throw uploadError
 
-    const { data: urlData, error: urlError } = await supabase.storage
-      .from('submissions')
-      .createSignedUrl(filePath, 24 * 60 * 60) // 24 hours expiry
-
-    if (urlError) throw urlError
-
-    return urlData.signedUrl
+    return filePath
   } catch (error) {
-    console.error('Error uploading file or creating signed URL:', error)
+    console.error('Error uploading file:', error)
     return null
   }
 }
@@ -174,13 +174,13 @@ export default function RiddleDisplay() {
     if (answer.toLowerCase() === riddle.answer.toLowerCase()) {
       let imageUrl = '';
       if (image) {
-        const uploadedUrl = await uploadImage(image);
-        if (!uploadedUrl) {
+        const uploadedPath = await uploadImage(image);
+        if (!uploadedPath) {
           setError('Failed to upload image. Please try again.');
           setUploading(false);
           return;
         }
-        imageUrl = uploadedUrl;
+        imageUrl = uploadedPath;
       }
 
       const { error } = await supabase
@@ -221,6 +221,7 @@ export default function RiddleDisplay() {
         setSuccess('Congratulations! You have completed all available riddles.');
         setRiddle(null);
         setRiddleNumber(null);
+        setShowConfetti(true);
       } else {
         fetchCurrentRiddle();
       }
@@ -229,6 +230,7 @@ export default function RiddleDisplay() {
     }
     setAnswer('');
     setImage(null);
+    setImagePreview(null);
   } catch (error) {
     setError('Failed to submit answer. Please try again.');
     console.error('Error submitting answer:', error);
@@ -236,6 +238,11 @@ export default function RiddleDisplay() {
     setUploading(false);
   }
 };
+
+ const getImageUrl = (path: string) => {
+   const { data } = supabase.storage.from('submissions').getPublicUrl(path)
+   return data.publicUrl
+ }
 
  if (!user) {
    return <div className="text-center text-gray-300">Please log in to view riddles.</div>
@@ -264,6 +271,14 @@ export default function RiddleDisplay() {
      {error || success || 'Loading riddle...'}
    </div>
  }
+
+ if (showConfetti) {
+  return (
+    <CongratulationsMessage
+      onClose={() => setShowConfetti(false)}
+    />
+  );
+}
 
  return (
    <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden">
@@ -315,6 +330,12 @@ export default function RiddleDisplay() {
                hover:file:bg-blue-700"
            />
          </div>
+         {imagePreview && (
+           <div className="mt-4">
+             <p className="text-sm font-medium text-gray-300 mb-2">Image Preview:</p>
+             <Image src={imagePreview} alt="Preview" width={200} height={200} className="rounded-md" />
+           </div>
+         )}
          {error && (
            <div className="text-red-500 text-sm">{error}</div>
          )}
