@@ -4,11 +4,15 @@ import React, { useState, useEffect } from 'react'
 import { useSupabase } from '@/app/supabase-provider'
 import { useAuth } from '@/hooks/useAuth'
 import { Riddle, UserProgress, AppSettings } from '@/types/supabase'
+import CountdownTimer from './CountdownTimer';
+
+const targetDate = new Date('2024-12-06T20:00:00') // December 6th, 2024, 20:00
 
 export default function RiddleDisplay() {
  const { supabase } = useSupabase()
  const { user } = useAuth()
  const [riddle, setRiddle] = useState<Riddle | null>(null)
+ const [riddleNumber, setRiddleNumber] = useState<number | null>(null)
  const [answer, setAnswer] = useState('')
  const [image, setImage] = useState<File | null>(null)
  const [showHint1, setShowHint1] = useState(false)
@@ -43,55 +47,70 @@ export default function RiddleDisplay() {
   if (!user?.id || !riddlesVisible) return;
 
   try {
+    // Fetch user progress
     const { data: progressData, error: progressError } = await supabase
       .from('user_progress')
       .select('current_riddle_id')
       .eq('user_id', user.id)
-      .single()
-
-    let currentRiddleId: number;
+      .single();
 
     if (progressError) {
       if (progressError.code === 'PGRST116') {
-        // No user progress found, fetch the first riddle
+        // No progress found, create initial progress
         const { data: firstRiddle, error: firstRiddleError } = await supabase
           .from('riddles')
-          .select('id')
+          .select('*')
           .order('order_number', { ascending: true })
           .limit(1)
-          .single()
+          .single();
 
-        if (firstRiddleError) throw firstRiddleError
+        if (firstRiddleError) throw firstRiddleError;
 
-        currentRiddleId = firstRiddle.id
-
-        // Create initial user progress
-        const { error: createProgressError } = await supabase
+        const { error: insertError } = await supabase
           .from('user_progress')
-          .insert({ user_id: user.id, current_riddle_id: currentRiddleId })
+          .insert({ user_id: user.id, current_riddle_id: firstRiddle.id });
 
-        if (createProgressError) throw createProgressError
+        if (insertError) throw insertError;
+
+        setRiddle(firstRiddle);
+        setRiddleNumber(1);
       } else {
-        throw progressError
+        throw progressError;
       }
     } else {
-      currentRiddleId = progressData.current_riddle_id
+      // Fetch the current riddle based on user progress
+      const { data: riddleData, error: riddleError } = await supabase
+        .from('riddles')
+        .select('*')
+        .eq('id', progressData.current_riddle_id)
+        .single();
+
+      if (riddleError) throw riddleError;
+
+      if (!riddleData) {
+        setRiddle(null);
+        setRiddleNumber(null);
+        setSuccess('Congratulations! You have completed all available riddles.');
+      } else {
+        setRiddle(riddleData);
+        // Fetch the riddle number
+        const { count, error: countError } = await supabase
+          .from('riddles')
+          .select('id', { count: 'exact', head: true })
+          .lte('order_number', riddleData.order_number);
+
+        if (countError) throw countError;
+
+        setRiddleNumber(count);
+        setShowHint1(false);
+        setShowHint2(false);
+      }
     }
-
-    const { data: riddleData, error: riddleError } = await supabase
-      .from('riddles')
-      .select('*')
-      .eq('id', currentRiddleId)
-      .single()
-
-    if (riddleError) throw riddleError
-
-    setRiddle(riddleData)
   } catch (error) {
-    console.error('Error fetching current riddle:', error)
-    setError('Failed to load the current riddle. Please try again later.')
+    console.error('Error fetching current riddle:', error);
+    setError('Failed to load the current riddle. Please try again later.');
   }
-}
+};
 
  const fetchRiddlesVisibility = async () => {
    const { data, error } = await supabase
@@ -140,28 +159,28 @@ export default function RiddleDisplay() {
 }
 
  const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setError(null)
-  setSuccess(null)
-  setUploading(true)
+  e.preventDefault();
+  setError(null);
+  setSuccess(null);
+  setUploading(true);
 
   if (!riddle || !user) {
-    setError('You must be logged in to submit an answer.')
-    setUploading(false)
-    return
+    setError('You must be logged in to submit an answer.');
+    setUploading(false);
+    return;
   }
 
   try {
     if (answer.toLowerCase() === riddle.answer.toLowerCase()) {
-      let imageUrl = ''
+      let imageUrl = '';
       if (image) {
-        const uploadedUrl = await uploadImage(image)
+        const uploadedUrl = await uploadImage(image);
         if (!uploadedUrl) {
-          setError('Failed to upload image. Please try again.')
-          setUploading(false)
-          return
+          setError('Failed to upload image. Please try again.');
+          setUploading(false);
+          return;
         }
-        imageUrl = uploadedUrl
+        imageUrl = uploadedUrl;
       }
 
       const { error } = await supabase
@@ -170,55 +189,88 @@ export default function RiddleDisplay() {
           user_id: user.id,
           riddle_id: riddle.id,
           answer: answer,
-          image_url: imageUrl // This will always be a string now
-        })
+          image_url: imageUrl
+        });
 
-      if (error) throw error
+      if (error) throw error;
 
-      setSuccess('Correct answer! Moving to the next riddle.')
+      setSuccess('Correct answer! Moving to the next riddle.');
       
+      // Fetch the next riddle
+      const { data: nextRiddle, error: nextRiddleError } = await supabase
+        .from('riddles')
+        .select('id')
+        .gt('order_number', riddle.order_number)
+        .order('order_number', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (nextRiddleError && nextRiddleError.code !== 'PGRST116') throw nextRiddleError;
+
+      const nextRiddleId = nextRiddle ? nextRiddle.id : riddle.id;
+
       // Update user progress to next riddle
       const { error: progressError } = await supabase
         .from('user_progress')
-        .update({ current_riddle_id: riddle.id + 1 })
-        .eq('user_id', user.id)
+        .update({ current_riddle_id: nextRiddleId })
+        .eq('user_id', user.id);
 
-      if (!progressError) {
-        fetchCurrentRiddle()
+      if (progressError) throw progressError;
+
+      if (!nextRiddle) {
+        setSuccess('Congratulations! You have completed all available riddles.');
+        setRiddle(null);
+        setRiddleNumber(null);
       } else {
-        throw progressError
+        fetchCurrentRiddle();
       }
     } else {
-      setError('Incorrect answer. Try again!')
+      setError('Incorrect answer. Try again!');
     }
-    setAnswer('')
-    setImage(null)
+    setAnswer('');
+    setImage(null);
   } catch (error) {
-    setError('Failed to submit answer. Please try again.')
-    console.error('Error submitting answer:', error)
+    setError('Failed to submit answer. Please try again.');
+    console.error('Error submitting answer:', error);
   } finally {
-    setUploading(false)
+    setUploading(false);
   }
-}
+};
 
  if (!user) {
    return <div className="text-center text-gray-300">Please log in to view riddles.</div>
  }
 
  if (!riddlesVisible) {
-   return <div className="text-center text-gray-300">Riddles are currently not available. Please check back later.</div>
- }
+  return (
+    <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden p-6">
+      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Riddles are currently hidden</h2>
+      {new Date() < targetDate ? (
+        <>
+          <p className="text-lg mb-6 text-gray-300 text-center">Riddles will be available in:</p>
+          <CountdownTimer targetDate={targetDate} />
+        </>
+      ) : (
+        <p className="text-lg mb-6 text-gray-300 text-center">
+          The admins have chosen to hide the riddles for now. Please check back later.
+        </p>
+      )}
+    </div>
+  )
+}
 
  if (!riddle) {
    return <div className="text-center text-gray-300">
-     {error || 'Loading riddle...'}
+     {error || success || 'Loading riddle...'}
    </div>
  }
 
  return (
    <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden">
      <div className="p-6">
-       <h2 className="text-2xl font-bold mb-4 text-blue-400">Current Riddle</h2>
+       <h2 className="text-2xl font-bold mb-4 text-blue-400">
+         {riddleNumber ? `Riddle ${riddleNumber}` : 'Current Riddle'}
+       </h2>
        <p className="text-lg mb-6 text-gray-300">{riddle.question}</p>
        {showHint1 && (
          <div className="mb-4 bg-gray-700 p-3 rounded">
