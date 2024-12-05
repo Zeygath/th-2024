@@ -5,8 +5,8 @@ import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { Database } from '@/types/supabase'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase environment variables are missing. Using dummy values for build.')
@@ -20,8 +20,8 @@ const Context = createContext<SupabaseContext | undefined>(undefined)
 
 export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient<Database>(
-    supabaseUrl || 'https://example.supabase.co',
-    supabaseAnonKey || 'dummy-key',
+    supabaseUrl,
+    supabaseAnonKey,
     {
       auth: {
         autoRefreshToken: true,
