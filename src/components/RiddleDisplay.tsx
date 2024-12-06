@@ -205,6 +205,24 @@ export default function RiddleDisplay() {
   }
 
   try {
+    // Check if the user has already submitted an answer for this riddle
+    const { data: existingSubmission, error: checkError } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('riddle_id', riddle.id)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    if (existingSubmission) {
+      setError('You have already submitted an answer for this riddle.');
+      setUploading(false);
+      return;
+    }
+
     if (answer.toLowerCase() === riddle.answer.toLowerCase()) {
       let imageUrl = '';
       if (image) {
@@ -226,17 +244,9 @@ export default function RiddleDisplay() {
           image_url: imageUrl
         });
 
-      if (error) {
-        if (error.code === '23505') { // unique constraint violation
-          setError('You have already submitted an answer for this riddle.');
-        } else {
-          throw error;
-        }
-        setUploading(false);
-        return;
-      }
+      if (error) throw error;
 
-      setSuccess('Riktig! Her er et referansebilde.');
+      setSuccess('Rett svar! Her er referansebilde:');
       setShowReferenceImage(true);
       
       // Fetch the next riddle
@@ -267,7 +277,7 @@ export default function RiddleDisplay() {
       if (progressError) throw progressError;
 
       if (!nextRiddle) {
-        setSuccess('Gratulerer! Du ha rfullført alle spærsmålene');
+        setSuccess('Congratulations! You have completed all available riddles.');
         setRiddle(null);
         setRiddleNumber(null);
         setShowConfetti(true);
@@ -285,7 +295,7 @@ export default function RiddleDisplay() {
     setImage(null);
     setImagePreview(null);
   } catch (error) {
-    setError('Klarte ikke å sende inn svar. Prøv igjen.');
+    setError('Failed to submit answer. Please try again.');
     console.error('Error submitting answer:', error);
   } finally {
     setUploading(false);
@@ -319,15 +329,15 @@ export default function RiddleDisplay() {
  if (!riddlesVisible) {
   return (
     <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden p-6">
-      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Oppgavene er skjult for øyeblikket</h2>
+      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Riddles are currently hidden</h2>
       {new Date() < targetDate ? (
         <>
-          <p className="text-lg mb-6 text-gray-300 text-center">Oppgavene blir tilgjengelige om:</p>
+          <p className="text-lg mb-6 text-gray-300 text-center">Riddles will be available in:</p>
           <CountdownTimer targetDate={targetDate} />
         </>
       ) : (
         <p className="text-lg mb-6 text-gray-300 text-center">
-          Admins har valgt å skjule oppgavene for øyeblikket. vennligst vent...
+          The admins have chosen to hide the riddles for now. Please check back later.
         </p>
       )}
     </div>
@@ -336,7 +346,7 @@ export default function RiddleDisplay() {
 
  if (!riddle) {
    return <div className="text-center text-gray-300">
-     {error || success || 'Henter oppgave...'}
+     {error || success || 'Laster inn...'}
    </div>
  }
 
@@ -357,7 +367,7 @@ export default function RiddleDisplay() {
           </p>
         )}
        <h2 className="text-2xl font-bold mb-4 text-blue-400">
-         {riddleNumber ? `Oppgave ${riddleNumber}` : 'Gjeldende oppgave'}
+         {riddleNumber ? `Oppgave ${riddleNumber}` : 'Nåværende oppgave'}
        </h2>
        <p className="text-lg mb-6 text-gray-300">{riddle.question}</p>
        {showHint1 && (
@@ -374,7 +384,7 @@ export default function RiddleDisplay() {
        )}
        {showReferenceImage && riddle.reference_image_url && (
           <div className="mb-4">
-            <h3 className="font-semibold text-green-400 mb-2">Referansebilde:</h3>
+            <h3 className="font-semibold text-green-400 mb-2">referansebilde:</h3>
             <div className="relative w-full h-64">
               <Image 
                 src={riddle.reference_image_url} 
@@ -402,7 +412,7 @@ export default function RiddleDisplay() {
          </div>
          <div>
            <label htmlFor="image" className="block text-sm font-medium text-gray-300">
-             Last opp bilde <span className="text-red-500">*</span>
+             last opp <span className="text-red-500">*</span>
            </label>
            <input
              type="file"
@@ -420,7 +430,7 @@ export default function RiddleDisplay() {
          </div>
          {imagePreview && (
            <div className="mt-4">
-             <p className="text-sm font-medium text-gray-300 mb-2">Forhåndsvisning:</p>
+             <p className="text-sm font-medium text-gray-300 mb-2">forhåndsvisning bilde:</p>
              <Image src={imagePreview} alt="Preview" width={200} height={200} className="rounded-md" />
            </div>
          )}
@@ -443,7 +453,7 @@ export default function RiddleDisplay() {
              disabled={uploading || !image}
              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
            >
-             {uploading ? 'Sender...' : 'Send inn'}
+             {uploading ? 'Sender inn...' : 'Send inn'}
            </button>
          </div>
        </form>
