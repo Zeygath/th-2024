@@ -62,7 +62,9 @@ export interface Database {
           order_number: number
           created_at: string
           updated_at: string
+          is_active: boolean
           riddle_type: string
+          reference_image_url: string | null
         }
         Insert: {
           id?: number
@@ -73,7 +75,9 @@ export interface Database {
           order_number: number
           created_at?: string
           updated_at?: string
+          is_active: boolean
           riddle_type: string
+          reference_image_url?: string | null
         }
         Update: {
           id?: number
@@ -84,7 +88,9 @@ export interface Database {
           order_number?: number
           created_at?: string
           updated_at?: string
+          is_active?: boolean
           riddle_type?: string
+          reference_image_url?: string | null
         }
       }
       submissions: {
@@ -96,7 +102,7 @@ export interface Database {
           image_url: string
           is_approved: boolean | null
           submitted_at: string
-          updated_at: string  // Add this line
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -106,7 +112,7 @@ export interface Database {
           image_url: string
           is_approved?: boolean | null
           submitted_at?: string
-          updated_at?: string  // Add this line
+          updated_at?: string
         }
         Update: {
           id?: string
@@ -116,7 +122,7 @@ export interface Database {
           image_url?: string
           is_approved?: boolean | null
           submitted_at?: string
-          updated_at?: string  // Add this line
+          updated_at?: string
         }
       }
       leaderboard: {
