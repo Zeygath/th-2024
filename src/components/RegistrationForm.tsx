@@ -6,11 +6,11 @@ import { useSupabase } from '@/app/supabase-provider'
 import { InsertTables } from '@/types/supabase'
 
 export default function RegistrationForm() {
+  const [registrationType, setRegistrationType] = useState<'individual' | 'team'>('individual')
   const [name, setName] = useState('')
+  const [teamName, setTeamName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isTeam, setIsTeam] = useState(false)
-  const [teamName, setTeamName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
@@ -28,8 +28,8 @@ export default function RegistrationForm() {
         password,
         options: {
           data: {
-            name: isTeam ? teamName : name,
-            is_team: isTeam,
+            name: registrationType === 'team' ? teamName : name,
+            is_team: registrationType === 'team',
           },
           emailRedirectTo: `${window.location.origin}/api/auth/confirm`
         }
@@ -41,8 +41,8 @@ export default function RegistrationForm() {
         // Step 2: Insert the user data into the users table
         const userData: InsertTables<'users'> = {
           id: authData.user.id,
-          name: isTeam ? teamName : name,
-          is_team: isTeam,
+          name: registrationType === 'team' ? teamName : name,
+          is_team: registrationType === 'team',
           email,
         }
         const { error: profileError } = await supabase
@@ -52,7 +52,7 @@ export default function RegistrationForm() {
         if (profileError) throw profileError
 
         // Step 3: If it's a team, create an entry in the teams table
-        if (isTeam) {
+        if (registrationType === 'team') {
           const teamData: InsertTables<'teams'> = {
             name: teamName,
             user_id: authData.user.id,
@@ -64,11 +64,11 @@ export default function RegistrationForm() {
           if (teamError) throw teamError
         }
 
-        setMessage('Registrering vellykket! Vennligst sjekk eposten din for å verifisere kontoen din.')
+        setMessage('Registrering vellykket! Sjekk eposten din for å bekrefte kontoen')
       }
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Registrering feilet: ${error.message}`);
+        setError(`Registration failed: ${error.message}`);
       } else {
         setError('An unknown error occurred during registration');
       }
@@ -79,18 +79,50 @@ export default function RegistrationForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 bg-gray-800 p-8 rounded-lg shadow-lg max-w-md mx-auto">
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-300">
-          {isTeam ? 'Lagnavn' : 'Navn'}
+        <label htmlFor="registrationType" className="block text-sm font-medium text-gray-300">
+          Vil du registrere lag eller enkeltperson?
         </label>
-        <input
-          type="text"
-          id="name"
-          value={isTeam ? teamName : name}
-          onChange={(e) => isTeam ? setTeamName(e.target.value) : setName(e.target.value)}
-          required
+        <select
+          id="registrationType"
+          value={registrationType}
+          onChange={(e) => setRegistrationType(e.target.value as 'individual' | 'team')}
           className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
+        >
+          <option value="individual">Enkeltperson</option>
+          <option value="team">Lag</option>
+        </select>
       </div>
+
+      {registrationType === 'individual' ? (
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+            Navn
+          </label>
+          <input
+            type="text"
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
+        </div>
+      ) : (
+        <div>
+          <label htmlFor="teamName" className="block text-sm font-medium text-gray-300">
+            Lagnavn
+          </label>
+          <input
+            type="text"
+            id="teamName"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            required
+            className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
+        </div>
+      )}
+
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-gray-300">
           Epost
@@ -117,17 +149,6 @@ export default function RegistrationForm() {
           minLength={6}
           className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
         />
-      </div>
-      <div>
-        <label className="inline-flex items-center">
-          <input
-            type="checkbox"
-            checked={isTeam}
-            onChange={(e) => setIsTeam(e.target.checked)}
-            className="rounded border-gray-600 text-blue-600 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 bg-gray-700"
-          />
-          <span className="ml-2 text-gray-300">Register som et lag</span>
-        </label>
       </div>
       {error && (
         <div className="text-red-500 text-sm">{error}</div>
