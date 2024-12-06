@@ -3,7 +3,7 @@ export type Json =
   | number
   | boolean
   | null
-  | { [key: string]: Json | undefined }
+  | { [key: string]: Json }
   | Json[]
 
 export interface Database {
@@ -62,6 +62,7 @@ export interface Database {
           order_number: number
           created_at: string
           updated_at: string
+          riddle_type: string
         }
         Insert: {
           id?: number
@@ -72,6 +73,7 @@ export interface Database {
           order_number: number
           created_at?: string
           updated_at?: string
+          riddle_type: string
         }
         Update: {
           id?: number
@@ -82,6 +84,7 @@ export interface Database {
           order_number?: number
           created_at?: string
           updated_at?: string
+          riddle_type?: string
         }
       }
       submissions: {
@@ -93,6 +96,7 @@ export interface Database {
           image_url: string
           is_approved: boolean | null
           submitted_at: string
+          updated_at: string  // Add this line
         }
         Insert: {
           id?: string
@@ -102,6 +106,7 @@ export interface Database {
           image_url: string
           is_approved?: boolean | null
           submitted_at?: string
+          updated_at?: string  // Add this line
         }
         Update: {
           id?: string
@@ -111,6 +116,7 @@ export interface Database {
           image_url?: string
           is_approved?: boolean | null
           submitted_at?: string
+          updated_at?: string  // Add this line
         }
       }
       leaderboard: {
@@ -156,18 +162,27 @@ export interface Database {
           user_id: string
           current_riddle_id: number
           updated_at: string
+          hint1_visible: boolean
+          hint2_visible: boolean
+          start_time: string | null
         }
         Insert: {
           id?: string
           user_id: string
           current_riddle_id: number
           updated_at?: string
+          hint1_visible: boolean
+          hint2_visible: boolean
+          start_time?: string | null
         }
         Update: {
           id?: string
           user_id?: string
           current_riddle_id?: number
           updated_at?: string
+          hint1_visible?: boolean
+          hint2_visible?: boolean
+          start_time?: string | null
         }
       }
       app_settings: {

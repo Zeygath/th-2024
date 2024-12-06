@@ -10,6 +10,9 @@ import Image from 'next/image'
 
 const targetDate = new Date('2024-12-06T20:00:00') // December 6th, 2024, 20:00
 
+const HINT1_DELAY = 10 * 60 * 1000 // 10 minutes in milliseconds
+const HINT2_DELAY = 15 * 60 * 1000 // 15 minutes in milliseconds
+
 export default function RiddleDisplay() {
  const { supabase } = useSupabase()
  const { user } = useAuth()
@@ -25,6 +28,7 @@ export default function RiddleDisplay() {
  const [riddlesVisible, setRiddlesVisible] = useState(false)
  const [uploading, setUploading] = useState(false)
  const [showConfetti, setShowConfetti] = useState(false)
+ const [startTime, setStartTime] = useState<Date | null>(null)
 
  useEffect(() => {
    if (user && riddlesVisible) {
@@ -33,19 +37,31 @@ export default function RiddleDisplay() {
  }, [user, riddlesVisible])
 
  useEffect(() => {
-   if (riddle) {
-     const timer1 = setTimeout(() => setShowHint1(true), 60000)
-     const timer2 = setTimeout(() => setShowHint2(true), 120000)
-     return () => {
-       clearTimeout(timer1)
-       clearTimeout(timer2)
-     }
-   }
- }, [riddle])
-
- useEffect(() => {
    fetchRiddlesVisibility()
  }, [])
+
+ useEffect(() => {
+   if (startTime) {
+     const checkHints = () => {
+       const now = new Date()
+       const elapsedTime = now.getTime() - startTime.getTime()
+
+       if (elapsedTime >= HINT1_DELAY && !showHint1) {
+         setShowHint1(true)
+         updateHintVisibility(1)
+       }
+
+       if (elapsedTime >= HINT2_DELAY && !showHint2) {
+         setShowHint2(true)
+         updateHintVisibility(2)
+       }
+     }
+
+     const timer = setInterval(checkHints, 1000) // Check every second
+
+     return () => clearInterval(timer)
+   }
+ }, [startTime, showHint1, showHint2])
 
  const fetchCurrentRiddle = async () => {
   if (!user?.id || !riddlesVisible) return;
@@ -54,7 +70,7 @@ export default function RiddleDisplay() {
     // Fetch user progress
     const { data: progressData, error: progressError } = await supabase
       .from('user_progress')
-      .select('current_riddle_id')
+      .select('current_riddle_id, hint1_visible, hint2_visible, start_time')
       .eq('user_id', user.id)
       .single();
 
@@ -70,14 +86,24 @@ export default function RiddleDisplay() {
 
         if (firstRiddleError) throw firstRiddleError;
 
+        const now = new Date().toISOString()
         const { error: insertError } = await supabase
           .from('user_progress')
-          .insert({ user_id: user.id, current_riddle_id: firstRiddle.id });
+          .insert({ 
+            user_id: user.id, 
+            current_riddle_id: firstRiddle.id,
+            hint1_visible: false,
+            hint2_visible: false,
+            start_time: now
+          });
 
         if (insertError) throw insertError;
 
         setRiddle(firstRiddle);
         setRiddleNumber(1);
+        setShowHint1(false);
+        setShowHint2(false);
+        setStartTime(new Date(now));
       } else {
         throw progressError;
       }
@@ -94,7 +120,7 @@ export default function RiddleDisplay() {
       if (!riddleData) {
         setRiddle(null);
         setRiddleNumber(null);
-        setSuccess('Gratuilerer! du har fullført alle oppgavene');
+        setSuccess('Gratulerer! Du har løst alle spørsmålene');
       } else {
         setRiddle(riddleData);
         // Fetch the riddle number
@@ -106,8 +132,9 @@ export default function RiddleDisplay() {
         if (countError) throw countError;
 
         setRiddleNumber(count);
-        setShowHint1(false);
-        setShowHint2(false);
+        setShowHint1(progressData.hint1_visible);
+        setShowHint2(progressData.hint2_visible);
+        setStartTime(progressData.start_time ? new Date(progressData.start_time) : null);
       }
     }
   } catch (error) {
@@ -208,7 +235,7 @@ export default function RiddleDisplay() {
         return;
       }
 
-      setSuccess('Rikitg svar! vi går videre...');
+      setSuccess('Riktig svar! Vi går videre..');
       
       // Fetch the next riddle
       const { data: nextRiddle, error: nextRiddleError } = await supabase
@@ -224,15 +251,21 @@ export default function RiddleDisplay() {
       const nextRiddleId = nextRiddle ? nextRiddle.id : riddle.id;
 
       // Update user progress to next riddle
+      const now = new Date().toISOString()
       const { error: progressError } = await supabase
         .from('user_progress')
-        .update({ current_riddle_id: nextRiddleId })
+        .update({ 
+          current_riddle_id: nextRiddleId,
+          hint1_visible: false,
+          hint2_visible: false,
+          start_time: now
+        })
         .eq('user_id', user.id);
 
       if (progressError) throw progressError;
 
       if (!nextRiddle) {
-        setSuccess('Gratulerer! du har fullført alle oppgavene.');
+        setSuccess('Gratulerer! du har løst alle oppgavene.');
         setRiddle(null);
         setRiddleNumber(null);
         setShowConfetti(true);
@@ -253,27 +286,42 @@ export default function RiddleDisplay() {
   }
 };
 
+ const updateHintVisibility = async (hintNumber: 1 | 2) => {
+   if (!user || !riddle) return;
+
+   const updateField = hintNumber === 1 ? 'hint1_visible' : 'hint2_visible';
+   const { error } = await supabase
+     .from('user_progress')
+     .update({ [updateField]: true })
+     .eq('user_id', user.id)
+     .eq('current_riddle_id', riddle.id);
+
+   if (error) {
+     console.error(`Error updating hint ${hintNumber} visibility:`, error);
+   }
+ };
+
  const getImageUrl = (path: string) => {
    const { data } = supabase.storage.from('submissions').getPublicUrl(path)
    return data.publicUrl
  }
 
  if (!user) {
-   return <div className="text-center text-gray-300">Vennligst logg inn for å se oppgavene</div>
+   return <div className="text-center text-gray-300">Vennligst logg inn for å se oppgaver.</div>
  }
 
  if (!riddlesVisible) {
   return (
     <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden p-6">
-      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Oppgavene er for øyeblikket skjult</h2>
+      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Oppgaver er skjult akkurat nå</h2>
       {new Date() < targetDate ? (
         <>
-          <p className="text-lg mb-6 text-gray-300 text-center">Oppgavene blir tilgjengelige om:</p>
+          <p className="text-lg mb-6 text-gray-300 text-center">Oppgaver blir tilgjengelige om:</p>
           <CountdownTimer targetDate={targetDate} />
         </>
       ) : (
         <p className="text-lg mb-6 text-gray-300 text-center">
-          Admins har valgt å skjule oppgavene. Sjekk igjen senere.
+          Admins har valgt å skjule oppgavene akkurat nå. Kom tilbake senere.
         </p>
       )}
     </div>
@@ -297,9 +345,15 @@ export default function RiddleDisplay() {
  return (
    <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden">
      <div className="p-6">
+     {riddle.riddle_type && (
+         <p className="text-md font-semibold mb-2 text-yellow-400">
+           Type: {riddle.riddle_type}
+         </p>
+       )}
        <h2 className="text-2xl font-bold mb-4 text-blue-400">
-         {riddleNumber ? `Oppgave ${riddleNumber}` : 'Nåværende oppgave'}
+         {riddleNumber ? `Oppgave #${riddleNumber}` : 'Gjeldende Oppgave'}
        </h2>
+
        <p className="text-lg mb-6 text-gray-300">{riddle.question}</p>
        {showHint1 && (
          <div className="mb-4 bg-gray-700 p-3 rounded">
