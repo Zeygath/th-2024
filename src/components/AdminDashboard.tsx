@@ -73,8 +73,8 @@ export default function AdminDashboard() {
        </div>
      </div>
      <TabsList className="grid w-full grid-cols-2">
-       <TabsTrigger value="riddles">Manage Riddles</TabsTrigger>
-       <TabsTrigger value="submissions">Review Submissions</TabsTrigger>
+       <TabsTrigger value="riddles">Administrer oppgaver</TabsTrigger>
+       <TabsTrigger value="submissions">Gå igjennom svar</TabsTrigger>
      </TabsList>
      <TabsContent value="riddles">
        <RiddleForm supabase={supabase} />

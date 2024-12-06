@@ -109,21 +109,45 @@ export default function SubmissionsList() {
 
   const handleApproval = async (submissionId: string, isApproved: boolean) => {
     try {
-      const { error } = await supabase
+      // First verify the submission exists
+      const { data: existingSubmission, error: fetchError } = await supabase
         .from('submissions')
-        .update({ is_approved: isApproved })
+        .select('id')
         .eq('id', submissionId)
-
-      if (error) throw error
-
+        .single();
+  
+      if (fetchError) {
+        throw new Error('Submission not found');
+      }
+  
+      // Then perform the update
+      const { data, error } = await supabase
+        .from('submissions')
+        .update({ 
+          is_approved: isApproved,
+          // Optionally track when it was approved
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', submissionId)
+        .select()
+        .single();
+  
+      if (error) {
+        throw error;
+      }
+  
+      // Update local state only after successful database update
       setSubmissions(prevSubmissions => 
         prevSubmissions.filter(submission => submission.id !== submissionId)
-      )
+      );
+  
+      return data;
     } catch (error) {
-      console.error('Error updating submission:', error)
-      setError('Failed to update submission. Please try again.')
+      console.error('Error updating submission:', error);
+      setError('Failed to update submission. Please try again.');
+      throw error;
     }
-  }
+  };
 
   const loadMore = () => {
     setPage(prevPage => prevPage + 1)

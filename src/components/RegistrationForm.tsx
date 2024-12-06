@@ -80,7 +80,7 @@ export default function RegistrationForm() {
     <form onSubmit={handleSubmit} className="space-y-6 bg-gray-800 p-8 rounded-lg shadow-lg max-w-md mx-auto">
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-gray-300">
-          {isTeam ? 'Team Name' : 'Name'}
+          {isTeam ? 'Lagnavn' : 'Navn'}
         </label>
         <input
           type="text"

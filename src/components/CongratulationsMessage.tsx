@@ -28,13 +28,13 @@ const CongratulationsMessage: React.FC<CongratulationsMessageProps> = ({ onClose
         numberOfPieces={500}
       />
       <div className="bg-white p-8 rounded-lg text-center">
-        <h2 className="text-3xl font-bold mb-4 text-blue-600">Congratulations!</h2>
-        <p className="text-xl mb-6">You have completed all the riddles!</p>
+        <h2 className="text-3xl font-bold mb-4 text-blue-600">Gratulerer!</h2>
+        <p className="text-xl mb-6">Du har fullført alle oppgavene!</p>
         <button
           onClick={onClose}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
-          Close
+          Lukk
         </button>
       </div>
     </div>

@@ -94,7 +94,7 @@ export default function RiddleDisplay() {
       if (!riddleData) {
         setRiddle(null);
         setRiddleNumber(null);
-        setSuccess('Congratulations! You have completed all available riddles.');
+        setSuccess('Gratuilerer! du har fullført alle oppgavene');
       } else {
         setRiddle(riddleData);
         // Fetch the riddle number
@@ -162,6 +162,12 @@ export default function RiddleDisplay() {
   e.preventDefault();
   setError(null);
   setSuccess(null);
+
+  if (!image) {
+    setError('Please upload an image before submitting.');
+    return;
+  }
+
   setUploading(true);
 
   if (!riddle || !user) {
@@ -192,9 +198,17 @@ export default function RiddleDisplay() {
           image_url: imageUrl
         });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') { // unique constraint violation
+          setError('You have already submitted an answer for this riddle.');
+        } else {
+          throw error;
+        }
+        setUploading(false);
+        return;
+      }
 
-      setSuccess('Correct answer! Moving to the next riddle.');
+      setSuccess('Rikitg svar! vi går videre...');
       
       // Fetch the next riddle
       const { data: nextRiddle, error: nextRiddleError } = await supabase
@@ -218,7 +232,7 @@ export default function RiddleDisplay() {
       if (progressError) throw progressError;
 
       if (!nextRiddle) {
-        setSuccess('Congratulations! You have completed all available riddles.');
+        setSuccess('Gratulerer! du har fullført alle oppgavene.');
         setRiddle(null);
         setRiddleNumber(null);
         setShowConfetti(true);
@@ -226,7 +240,7 @@ export default function RiddleDisplay() {
         fetchCurrentRiddle();
       }
     } else {
-      setError('Incorrect answer. Try again!');
+      setError('Feil svar. Prøv igjen!');
     }
     setAnswer('');
     setImage(null);
@@ -245,21 +259,21 @@ export default function RiddleDisplay() {
  }
 
  if (!user) {
-   return <div className="text-center text-gray-300">Please log in to view riddles.</div>
+   return <div className="text-center text-gray-300">Vennligst logg inn for å se oppgavene</div>
  }
 
  if (!riddlesVisible) {
   return (
     <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden p-6">
-      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Riddles are currently hidden</h2>
+      <h2 className="text-2xl font-bold mb-4 text-blue-400 text-center">Oppgavene er for øyeblikket skjult</h2>
       {new Date() < targetDate ? (
         <>
-          <p className="text-lg mb-6 text-gray-300 text-center">Riddles will be available in:</p>
+          <p className="text-lg mb-6 text-gray-300 text-center">Oppgavene blir tilgjengelige om:</p>
           <CountdownTimer targetDate={targetDate} />
         </>
       ) : (
         <p className="text-lg mb-6 text-gray-300 text-center">
-          The admins have chosen to hide the riddles for now. Please check back later.
+          Admins har valgt å skjule oppgavene. Sjekk igjen senere.
         </p>
       )}
     </div>
@@ -268,7 +282,7 @@ export default function RiddleDisplay() {
 
  if (!riddle) {
    return <div className="text-center text-gray-300">
-     {error || success || 'Loading riddle...'}
+     {error || success || 'Laster inn oppgave...'}
    </div>
  }
 
@@ -284,7 +298,7 @@ export default function RiddleDisplay() {
    <div className="max-w-2xl mx-auto bg-gray-800 shadow-lg rounded-lg overflow-hidden">
      <div className="p-6">
        <h2 className="text-2xl font-bold mb-4 text-blue-400">
-         {riddleNumber ? `Riddle ${riddleNumber}` : 'Current Riddle'}
+         {riddleNumber ? `Oppgave ${riddleNumber}` : 'Nåværende oppgave'}
        </h2>
        <p className="text-lg mb-6 text-gray-300">{riddle.question}</p>
        {showHint1 && (
@@ -302,7 +316,7 @@ export default function RiddleDisplay() {
        <form onSubmit={handleSubmit} className="space-y-4">
          <div>
            <label htmlFor="answer" className="block text-sm font-medium text-gray-300">
-             Your Answer
+             Ditt svar
            </label>
            <input
              type="text"
@@ -315,13 +329,14 @@ export default function RiddleDisplay() {
          </div>
          <div>
            <label htmlFor="image" className="block text-sm font-medium text-gray-300">
-             Upload Image
+             Last opp bilde <span className="text-red-500">*</span>
            </label>
            <input
              type="file"
              id="image"
              onChange={handleImageChange}
              accept="image/*"
+             required
              className="mt-1 block w-full text-sm text-gray-300
                file:mr-4 file:py-2 file:px-4
                file:rounded-full file:border-0
@@ -332,12 +347,19 @@ export default function RiddleDisplay() {
          </div>
          {imagePreview && (
            <div className="mt-4">
-             <p className="text-sm font-medium text-gray-300 mb-2">Image Preview:</p>
+             <p className="text-sm font-medium text-gray-300 mb-2">Forhåndsvisning:</p>
              <Image src={imagePreview} alt="Preview" width={200} height={200} className="rounded-md" />
            </div>
          )}
-         {error && (
-           <div className="text-red-500 text-sm">{error}</div>
+         {!image && error && (
+           <div className="text-red-500 text-sm mt-2">
+             {error}
+           </div>
+         )}
+         {image && error && (
+           <div className="text-red-500 text-sm mt-2">
+             {error}
+           </div>
          )}
          {success && (
            <div className="text-green-500 text-sm">{success}</div>
@@ -345,10 +367,10 @@ export default function RiddleDisplay() {
          <div>
            <button
              type="submit"
-             disabled={uploading}
-             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+             disabled={uploading || !image}
+             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
            >
-             {uploading ? 'Submitting...' : 'Submit Answer'}
+             {uploading ? 'Sender inn...' : 'Send inn'}
            </button>
          </div>
        </form>
